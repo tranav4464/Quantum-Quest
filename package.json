@@ -1,0 +1,29 @@
+{
+  "name": "finsight-fullstack",
+  "version": "1.0.0",
+  "description": "FinSight AI - Complete Financial Management Application",
+  "scripts": {
+    "dev": "concurrently --restart-tries 3 --restart-after 3000 --kill-others-on-fail \"npm run dev:frontend\" \"npm run dev:backend\" --names \"frontend,backend\" --prefix-colors \"blue,green\"",
+    "dev:frontend": "cd finsight-nextjs && npm run dev",
+    "dev:backend": "cd finsight_backend && python manage.py runserver 8000",
+    "start": "concurrently --restart-tries 3 --restart-after 3000 --kill-others-on-fail \"npm run start:frontend\" \"npm run dev:backend\" --names \"frontend,backend\" --prefix-colors \"blue,green\"",
+    "start:frontend": "cd finsight-nextjs && npm run start",
+    "build": "cd finsight-nextjs && npm run build",
+    "build:mobile": "cd finsight-nextjs && npm run build && mkdir -p out && xcopy /E /I /Y .next\\static out\\static && xcopy /E /I /Y public out",
+    "cap:sync": "npx cap sync",
+    "cap:android": "npm run build:mobile && npx cap sync && npx cap open android",
+    "install:all": "cd finsight-nextjs && npm install && cd ../finsight_backend && pip install -r requirements.txt",
+    "setup": "npm run install:all",
+    "postinstall": "npm run install:all"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.2",
+    "@capacitor/core": "^7.4.2",
+    "@capacitor/ios": "^7.4.2",
+    "concurrently": "^9.2.0",
+    "recharts": "^3.1.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.4.2"
+  }
+}
