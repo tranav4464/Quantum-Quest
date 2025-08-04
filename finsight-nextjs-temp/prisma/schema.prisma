@@ -1,0 +1,452 @@
+// FinSight Phase 2 Database Schema
+// Comprehensive financial management system with user accounts, transactions, goals, and AI insights
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Authentication
+  accounts      Account[]
+  sessions      Session[]
+
+  // Financial Data
+  profile       UserProfile?
+  bankAccounts  BankAccount[]
+  transactions  Transaction[]
+  goals         Goal[]
+  budgets       Budget[]
+  investments   Investment[]
+  debts         Debt[]
+  insights      AIInsight[]
+  reports       Report[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verificationtokens")
+}
+
+// User Profile and Financial Health
+model UserProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Personal Information
+  dateOfBirth       DateTime?
+  occupation        String?
+  annualIncome      Decimal?  @db.Decimal(12, 2)
+  riskTolerance     RiskLevel @default(MODERATE)
+  
+  // Financial Health Metrics
+  healthScore       Int       @default(0) // 0-100
+  netWorth          Decimal   @default(0) @db.Decimal(12, 2)
+  monthlyIncome     Decimal   @default(0) @db.Decimal(12, 2)
+  monthlyExpenses   Decimal   @default(0) @db.Decimal(12, 2)
+  totalDebt         Decimal   @default(0) @db.Decimal(12, 2)
+  emergencyFund     Decimal   @default(0) @db.Decimal(12, 2)
+  
+  // Preferences
+  currency          String    @default("USD")
+  timezone          String    @default("UTC")
+  notificationsEnabled Boolean @default(true)
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("user_profiles")
+}
+
+// Bank Accounts and Financial Connections
+model BankAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Plaid Integration
+  plaidAccountId    String   @unique
+  plaidAccessToken  String
+  plaidItemId       String
+  
+  // Account Details
+  name              String
+  officialName      String?
+  type              AccountType
+  subtype           String?
+  balance           Decimal  @db.Decimal(12, 2)
+  availableBalance  Decimal? @db.Decimal(12, 2)
+  creditLimit       Decimal? @db.Decimal(12, 2)
+  
+  // Account Status
+  isActive          Boolean  @default(true)
+  lastSynced        DateTime @default(now())
+  
+  // Relationships
+  transactions      Transaction[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("bank_accounts")
+}
+
+// Transactions and Spending
+model Transaction {
+  id                String      @id @default(cuid())
+  userId            String
+  user              User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bankAccountId     String?
+  bankAccount       BankAccount? @relation(fields: [bankAccountId], references: [id])
+  
+  // Transaction Details
+  plaidTransactionId String?   @unique
+  amount            Decimal    @db.Decimal(12, 2)
+  description       String
+  merchantName      String?
+  date              DateTime
+  
+  // Categorization
+  category          String
+  subcategory       String?
+  tags              String[]
+  
+  // AI Enhancement
+  aiCategory        String?
+  aiConfidence      Float?
+  aiInsights        String?
+  
+  // Status
+  isPending         Boolean    @default(false)
+  isRecurring       Boolean    @default(false)
+  
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  @@map("transactions")
+}
+
+// Goals and Financial Planning
+model Goal {
+  id              String     @id @default(cuid())
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Goal Details
+  name            String
+  description     String?
+  targetAmount    Decimal    @db.Decimal(12, 2)
+  currentAmount   Decimal    @default(0) @db.Decimal(12, 2)
+  targetDate      DateTime?
+  category        GoalCategory
+  priority        Priority   @default(MEDIUM)
+  
+  // Progress Tracking
+  progress        Float      @default(0) // 0-100%
+  isCompleted     Boolean    @default(false)
+  completedAt     DateTime?
+  
+  // FIRE-specific fields
+  fireNumber      Decimal?   @db.Decimal(12, 2) // For FIRE goals
+  withdrawalRate  Float?     // Safe withdrawal rate (typically 4%)
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@map("goals")
+}
+
+// Budgeting System
+model Budget {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Budget Details
+  name            String
+  category        String
+  allocatedAmount Decimal  @db.Decimal(12, 2)
+  spentAmount     Decimal  @default(0) @db.Decimal(12, 2)
+  period          BudgetPeriod @default(MONTHLY)
+  
+  // Timeline
+  startDate       DateTime
+  endDate         DateTime?
+  
+  // Status
+  isActive        Boolean  @default(true)
+  alertThreshold  Float?   // Alert when spending reaches this % of budget
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("budgets")
+}
+
+// Investment Tracking
+model Investment {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Investment Details
+  symbol          String
+  name            String
+  type            InvestmentType
+  shares          Decimal  @db.Decimal(16, 8)
+  averageCost     Decimal  @db.Decimal(12, 4)
+  currentPrice    Decimal? @db.Decimal(12, 4)
+  
+  // Performance
+  totalValue      Decimal  @db.Decimal(12, 2)
+  gainLoss        Decimal  @db.Decimal(12, 2)
+  gainLossPercent Float
+  
+  // Tracking
+  lastUpdated     DateTime @default(now())
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("investments")
+}
+
+// Debt Management
+model Debt {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Debt Details
+  name            String
+  type            DebtType
+  balance         Decimal  @db.Decimal(12, 2)
+  originalAmount  Decimal  @db.Decimal(12, 2)
+  interestRate    Float
+  minimumPayment  Decimal  @db.Decimal(12, 2)
+  
+  // Payment Strategy
+  strategy        DebtStrategy @default(MINIMUM)
+  extraPayment    Decimal?     @db.Decimal(12, 2)
+  
+  // Timeline
+  dueDate         DateTime?
+  payoffDate      DateTime?
+  
+  // Status
+  isActive        Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("debts")
+}
+
+// AI Insights and Analytics
+model AIInsight {
+  id              String     @id @default(cuid())
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Insight Details
+  title           String
+  content         String     @db.Text
+  type            InsightType
+  category        String
+  confidence      Float      // AI confidence score 0-1
+  
+  // Data Sources
+  dataPoints      Json       // Referenced transaction IDs, account IDs, etc.
+  
+  // Status
+  isRead          Boolean    @default(false)
+  isActionable    Boolean    @default(false)
+  priority        Priority   @default(LOW)
+  
+  // Metadata
+  generatedAt     DateTime   @default(now())
+  expiresAt       DateTime?
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@map("ai_insights")
+}
+
+// Reporting System
+model Report {
+  id              String     @id @default(cuid())
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Report Details
+  name            String
+  type            ReportType
+  period          String     // "2024-01", "Q1-2024", etc.
+  data            Json       // Report data and visualizations
+  
+  // File Management
+  fileUrl         String?    // If saved as PDF/file
+  filePath        String?
+  
+  // Status
+  status          ReportStatus @default(DRAFT)
+  isPublic        Boolean    @default(false)
+  
+  // Timeline
+  generatedAt     DateTime   @default(now())
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@map("reports")
+}
+
+// Enums
+enum RiskLevel {
+  CONSERVATIVE
+  MODERATE
+  AGGRESSIVE
+}
+
+enum AccountType {
+  CHECKING
+  SAVINGS
+  CREDIT_CARD
+  INVESTMENT
+  LOAN
+  MORTGAGE
+  OTHER
+}
+
+enum GoalCategory {
+  EMERGENCY_FUND
+  FIRE
+  RETIREMENT
+  HOUSE_DOWN_PAYMENT
+  VACATION
+  DEBT_PAYOFF
+  EDUCATION
+  CAR
+  WEDDING
+  OTHER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum BudgetPeriod {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum InvestmentType {
+  STOCK
+  ETF
+  MUTUAL_FUND
+  BOND
+  CRYPTO
+  REAL_ESTATE
+  OTHER
+}
+
+enum DebtType {
+  CREDIT_CARD
+  STUDENT_LOAN
+  MORTGAGE
+  AUTO_LOAN
+  PERSONAL_LOAN
+  OTHER
+}
+
+enum DebtStrategy {
+  MINIMUM
+  AVALANCHE
+  SNOWBALL
+  CUSTOM
+}
+
+enum InsightType {
+  SPENDING_PATTERN
+  SAVING_OPPORTUNITY
+  BUDGET_WARNING
+  GOAL_PROGRESS
+  INVESTMENT_ADVICE
+  DEBT_OPTIMIZATION
+  TAX_TIP
+  GENERAL
+}
+
+enum ReportType {
+  NET_WORTH
+  SPENDING_ANALYSIS
+  GOAL_PROGRESS
+  INVESTMENT_PERFORMANCE
+  DEBT_SUMMARY
+  TAX_SUMMARY
+  COMPREHENSIVE
+}
+
+enum ReportStatus {
+  DRAFT
+  GENERATING
+  COMPLETED
+  ERROR
+}
